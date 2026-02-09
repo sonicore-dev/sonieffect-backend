@@ -1,5 +1,6 @@
 import os
-from fastapi import FastAPI, Body, File, Query, UploadFile
+import json
+from fastapi import FastAPI, File, UploadFile, Query
 from fastapi.responses import FileResponse, JSONResponse
 from core.config.server_config import FINAL_IP, SERVER_URL
 from dir_config import AUDIO_DIR, VIDEO_DIR
@@ -17,13 +18,12 @@ def register_api_routes(app: FastAPI):
     async def serve_media_file(directory: str, filename: str):
         try:
             filepath = os.path.join(directory, filename)
-
             if not os.path.isfile(filepath):
                 return JSONResponse({"error": "File not found"}, status_code=404)
 
             return FileResponse(
                 filepath,
-                media_type="application/octet-stream",  # FORCE DOWNLOAD
+                media_type="application/octet-stream",
                 filename=filename,
                 headers={
                     "Content-Disposition": f'attachment; filename="{filename}"',
@@ -33,10 +33,7 @@ def register_api_routes(app: FastAPI):
             )
 
         except Exception as e:
-            return JSONResponse(
-                {"error": f"Failed to serve file: {str(e)}"},
-                status_code=500
-            )
+            return JSONResponse({"error": f"Failed to serve file: {str(e)}"}, status_code=500)
 
     @app.get("/download/audio/{filename:path}")
     async def download_audio(filename: str):
@@ -48,11 +45,27 @@ def register_api_routes(app: FastAPI):
 
     @app.get("/api/check-updates")
     async def check_sonieffect_updates():
-        return {
-            "build_number": 3,
-            "new_version": "1.0.1",
-            "message": "New Update is Available! Please Download the Latest Version.",
-        }
+        try:
+            json_path = os.path.join("core", "config", "updates-data.json")
+            if not os.path.isfile(json_path):
+                return JSONResponse({"error": "Update data not found"}, status_code=404)
+
+            with open(json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            # Ensure expected keys exist
+            build_number = data.get("build_number")
+            new_version = data.get("new_version")
+            message = data.get("message", "New update available!")
+
+            return {
+                "build_number": build_number,
+                "new_version": new_version,
+                "message": message
+            }
+
+        except Exception as e:
+            return JSONResponse({"error": f"Failed to read updates: {str(e)}"}, status_code=500)
 
     @app.post("/api/convert")
     async def convert(
